@@ -13,7 +13,7 @@ export interface PhonicsSet {
 
 export interface WordResult {
   word: PhonicsWord;
-  result: 'correct' | 'incorrect';
+  result: 'correct' | 'incorrect' | 'not_attempted';
   note?: string;
 }
 
@@ -42,4 +42,24 @@ export interface CheckResult {
   reasonNotDone?: 'Absent' | 'Ill' | 'Other';
   score: number;
   percentage: number;
+}
+
+export interface MarkingSheetData {
+  studentName: string;
+  nsn: string;
+  teacher: string;
+  school: string;
+  date: string;
+  location: string;
+  checkType: '20-week' | '40-week';
+  deliveryMedium: 'Digital' | 'Paper';
+  reasonNotDone?: 'Absent' | 'Ill' | 'Refused' | 'Other';
+  comments?: string;
+  results: Array<{
+    itemNo: number;
+    word: string;
+    graphemeType: string;
+    correct: 'Got it' | 'Not yet';
+    comment?: string;
+  }>;
 }
