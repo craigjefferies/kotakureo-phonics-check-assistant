@@ -1,4 +1,5 @@
-import type { PhonicsSet, PhonicsWord, CheckResult } from '../types';
+import type { PhonicsSet, PhonicsWord, CheckResult, WordResult } from '../types';
+import JSZip from 'jszip';
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Configure PDF.js worker for bundled version
@@ -293,123 +294,197 @@ export const parsePhonicsPdf = (file: File): Promise<Omit<PhonicsSet, 'id' | 'cr
   });
 };
 
-export const exportResultsToExcel = (result: CheckResult) => {
-  const workbook = XLSX.utils.book_new();
+const TEMPLATE_PATH = '/Phonics-Check-Marking-Sheet-test-2025-10-25.xlsx';
 
-  // Create CoverSheet
-  const coverSheetData = [
-    ['English Phonics Check – Cover Sheet'],
-    [],
-    ['Student\'s full name *', result.studentName],
-    ['NSN *', result.nsn],
-    ['Teacher', result.teacher],
-    ['School', result.school],
-    ['Test date', result.date],
-    ['Location of test', result.location],
-    ['Check type', result.checkType],
-    ['Delivery medium', 'Digital'], // Since this is exported from the app
-    ['Reason if check not conducted', result.reasonNotDone || ''],
-    ['Comments', result.overallComment || '']
-  ];
+const SHEET_PATHS = {
+  cover: 'xl/worksheets/sheet1.xml',
+  marking: 'xl/worksheets/sheet2.xml',
+};
 
-  const coverSheet = XLSX.utils.aoa_to_sheet(coverSheetData);
-  XLSX.utils.book_append_sheet(workbook, coverSheet, 'CoverSheet');
+const COVER_SHEET_CELLS = {
+  studentName: 'C5',
+  nsn: 'E5',
+  testDate: 'C7',
+  checkType: 'E7',
+  reasonNotDone: 'C9',
+  generalComment: 'E9',
+  adminChange: 'C15',
+  adminChangeReason: 'E15',
+  location: 'C24',
+  deliveryMedium: 'E24',
+  duration: 'G24',
+};
 
-  // Create MarkingSheet
-  const markingSheetData = [
-    ['№', 'Item', 'Grapheme Type', 'Correct?', 'Comment']
-  ];
+const MARKING_SHEET_CONFIG = {
+  setNameCell: 'F2',
+  startRow: 4,
+  correctColumn: 'D',
+  commentColumn: 'E',
+};
 
-  // Add each result
-  result.results.forEach((wordResult, index) => {
-    markingSheetData.push([
-      (index + 1).toString(),
-      wordResult.word.item,
-      wordResult.word.graphemeType,
-      wordResult.result === 'correct' ? 'Got it' : 'Not yet',
-      wordResult.note || ''
-    ]);
-  });
+function formatDisplayDate(date: string): string {
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) {
+    return date;
+  }
+  return parsed.toLocaleDateString('en-NZ');
+}
 
-  const markingSheet = XLSX.utils.aoa_to_sheet(markingSheetData);
-  XLSX.utils.book_append_sheet(workbook, markingSheet, 'MarkingSheet');
+function cellReference(column: string, row: number): string {
+  return `${column}${row}`;
+}
 
-  // Create Summary sheet
-  const summaryData = [
-    ['Grapheme Type', 'Correct', 'Out of', '%']
-  ];
+function findRowElement(doc: Document, rowNumber: number): Element | null {
+  const rows = Array.from(doc.getElementsByTagName('row'));
+  return rows.find(row => Number(row.getAttribute('r')) === rowNumber) || null;
+}
 
-  // Group results by grapheme type
-  const graphemeGroups: { [key: string]: { correct: number; total: number } } = {};
+function findCellElement(row: Element, reference: string): Element | null {
+  const cells = Array.from(row.getElementsByTagName('c'));
+  return cells.find(cell => cell.getAttribute('r') === reference) || null;
+}
 
-  result.results.forEach(wordResult => {
-    const type = wordResult.word.graphemeType;
-    if (!graphemeGroups[type]) {
-      graphemeGroups[type] = { correct: 0, total: 0 };
+function clearCellContents(doc: Document, cell: Element): void {
+  if (cell.hasChildNodes()) {
+    while (cell.firstChild) {
+      cell.removeChild(cell.firstChild);
     }
-    graphemeGroups[type].total++;
-    if (wordResult.result === 'correct') {
-      graphemeGroups[type].correct++;
+  }
+  if (cell.getAttribute('t')) {
+    cell.removeAttribute('t');
+  }
+}
+
+function setInlineStringValue(doc: Document, cell: Element | null, value: string): void {
+  if (!cell) return;
+  const namespace = doc.documentElement.namespaceURI;
+  clearCellContents(doc, cell);
+  if (!value) {
+    return;
+  }
+  if (namespace) {
+    cell.setAttribute('t', 'inlineStr');
+    const isElement = doc.createElementNS(namespace, 'is');
+    const textElement = doc.createElementNS(namespace, 't');
+    textElement.textContent = value;
+    isElement.appendChild(textElement);
+    cell.appendChild(isElement);
+  }
+}
+
+function upsertCell(doc: Document, reference: string): Element | null {
+  const namespace = doc.documentElement.namespaceURI;
+  const rowNumber = parseInt(reference.replace(/[^0-9]/g, ''), 10);
+  if (!namespace || Number.isNaN(rowNumber)) {
+    return null;
+  }
+  let row = findRowElement(doc, rowNumber);
+  if (!row) {
+    const sheetData = doc.getElementsByTagName('sheetData')[0];
+    if (!sheetData) {
+      return null;
     }
-  });
+    row = doc.createElementNS(namespace, 'row');
+    row.setAttribute('r', rowNumber.toString());
+    sheetData.appendChild(row);
+  }
+  let cell = findCellElement(row, reference);
+  if (!cell) {
+    cell = doc.createElementNS(namespace, 'c');
+    cell.setAttribute('r', reference);
+    row.appendChild(cell);
+  }
+  return cell;
+}
 
-  // Add summary rows
-  Object.entries(graphemeGroups).forEach(([type, stats]) => {
-    const percentage = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
-    summaryData.push([type, stats.correct.toString(), stats.total.toString(), percentage.toString()]);
-  });
+async function loadTemplate(): Promise<JSZip> {
+  const response = await fetch(TEMPLATE_PATH);
+  if (!response.ok) {
+    throw new Error('Unable to load export template');
+  }
+  const buffer = await response.arrayBuffer();
+  return JSZip.loadAsync(buffer);
+}
 
-  // Add overall total
-  const totalCorrect = result.results.filter(r => r.result === 'correct').length;
-  summaryData.push([]);
-  summaryData.push(['Total', totalCorrect.toString(), result.results.length.toString(), Math.round(result.percentage).toString()]);
+function updateCoverSheet(doc: Document, result: CheckResult): void {
+  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.studentName), result.studentName);
+  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.nsn), result.nsn);
+  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.testDate), formatDisplayDate(result.date));
+  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.checkType), result.checkType);
+  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.reasonNotDone), result.reasonNotDone || '');
+  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.generalComment), result.overallComment || '');
+  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.adminChange), '');
+  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.adminChangeReason), '');
+  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.location), result.location || '');
+  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.deliveryMedium), 'Digital');
+  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.duration), '');
+}
 
-  const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-  XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+function mapResultOutcome(outcome: WordResult['result']): string {
+  if (outcome === 'correct') return 'Got it';
+  if (outcome === 'incorrect') return 'Not yet';
+  return '';
+}
 
-  // Create Lists sheet (data validation)
-  const listsData = [
-    ['Lists Sheet - Data Validation'],
-    [],
-    ['Correct Values:'],
-    ['Got it'],
-    ['Not yet'],
-    [],
-    ['Location Values:'],
-    ['Classroom'],
-    ['Library'],
-    ['Hall'],
-    ['Other'],
-    [],
-    ['Reason Values:'],
-    ['Absent'],
-    ['Ill'],
-    ['Refused'],
-    ['Other'],
-    [],
-    ['Grapheme Types:'],
-    ['VC'],
-    ['CVC'],
-    ['CVCC'],
-    ['VCC'],
-    ['CCVC'],
-    ['Other'],
-    [],
-    ['Check Types:'],
-    ['20-week'],
-    ['40-week'],
-    [],
-    ['Delivery Medium:'],
-    ['Digital'],
-    ['Paper']
-  ];
+function updateMarkingSheet(doc: Document, result: CheckResult): void {
+  setInlineStringValue(doc, upsertCell(doc, MARKING_SHEET_CONFIG.setNameCell), result.phonicsSetName);
 
-  const listsSheet = XLSX.utils.aoa_to_sheet(listsData);
-  XLSX.utils.book_append_sheet(workbook, listsSheet, 'Lists');
+  const totalRows = Math.min(result.results.length, 40);
+  for (let index = 0; index < totalRows; index++) {
+    const rowNumber = MARKING_SHEET_CONFIG.startRow + index;
+    const correctRef = cellReference(MARKING_SHEET_CONFIG.correctColumn, rowNumber);
+    const commentRef = cellReference(MARKING_SHEET_CONFIG.commentColumn, rowNumber);
+    const wordResult = result.results[index];
+    setInlineStringValue(doc, upsertCell(doc, correctRef), mapResultOutcome(wordResult.result));
+    setInlineStringValue(doc, upsertCell(doc, commentRef), wordResult.note || '');
+  }
 
-  // Generate filename and download
-  const dateStr = new Date(result.date).toISOString().split('T')[0];
-  const filename = `Phonics-Check-Marking-Sheet-${result.studentName.replace(/\s/g, '_')}-${dateStr}.xlsx`;
+  for (let index = result.results.length; index < 40; index++) {
+    const rowNumber = MARKING_SHEET_CONFIG.startRow + index;
+    setInlineStringValue(doc, upsertCell(doc, cellReference(MARKING_SHEET_CONFIG.correctColumn, rowNumber)), '');
+    setInlineStringValue(doc, upsertCell(doc, cellReference(MARKING_SHEET_CONFIG.commentColumn, rowNumber)), '');
+  }
+}
 
-  XLSX.writeFile(workbook, filename);
+export const exportResultsToExcel = async (result: CheckResult) => {
+  try {
+    const zip = await loadTemplate();
+    const parser = new DOMParser();
+    const serializer = new XMLSerializer();
+
+    const coverSheetXml = await zip.file(SHEET_PATHS.cover)?.async('text');
+    const markingSheetXml = await zip.file(SHEET_PATHS.marking)?.async('text');
+
+    if (!coverSheetXml || !markingSheetXml) {
+      throw new Error('Template is missing expected worksheets');
+    }
+
+    const coverDoc = parser.parseFromString(coverSheetXml, 'application/xml');
+    const markingDoc = parser.parseFromString(markingSheetXml, 'application/xml');
+
+    updateCoverSheet(coverDoc, result);
+    updateMarkingSheet(markingDoc, result);
+
+    zip.file(SHEET_PATHS.cover, serializer.serializeToString(coverDoc));
+    zip.file(SHEET_PATHS.marking, serializer.serializeToString(markingDoc));
+
+    if (zip.file('xl/calcChain.xml')) {
+      zip.remove('xl/calcChain.xml');
+    }
+
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const dateStr = new Date(result.date).toISOString().split('T')[0];
+    const filename = `Phonics-Check-Marking-Sheet-${result.studentName.replace(/\s/g, '_')}-${dateStr}.xlsx`;
+
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  } catch (error) {
+    console.error('Export failed', error);
+    alert('Unable to export results. Please try again.');
+  }
 };
