@@ -92,11 +92,11 @@ const UploadMaterials: React.FC<UploadMaterialsProps> = ({ onUploadSuccess, onCa
               </div>
               <p className="text-xs text-slate-500">{uploadHint}</p>
               <div className="mt-2 text-xs text-slate-600 bg-slate-50 p-2 rounded">
-                <p className="font-medium mb-1">� Upload Formats:</p>
+                <p className="font-medium mb-1">Upload Formats:</p>
                 <ul className="text-left space-y-1">
                   <li>• <strong>PDF:</strong> NZ MoE phonics materials (e.g., "Term 4 2025-1.pdf")</li>
                   <li>• <strong>Excel:</strong> .xlsx or .xls files with word lists</li>
-                  <li>• Both formats should contain exactly 40 words</li>
+                  <li>• Both formats should contain 20-40 words (20-week or 40-week checks)</li>
                 </ul>
               </div>
             </div>

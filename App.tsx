@@ -1,11 +1,13 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, Suspense } from 'react';
 import type { PhonicsSet, CheckResult, WordResult, PhonicsWord } from './types';
 import useLocalStorage from './hooks/useLocalStorage';
 import Dashboard from './components/Dashboard';
-import UploadMaterials from './components/UploadMaterials';
 import NewCheck from './components/NewCheck';
 import Assessment from './components/Assessment';
 import Summary from './components/Summary';
+
+// Lazy load UploadMaterials to reduce initial bundle size
+const UploadMaterials = React.lazy(() => import('./components/UploadMaterials'));
 
 type View = 'dashboard' | 'upload' | 'newCheck' | 'assessment' | 'summary';
 
@@ -62,7 +64,7 @@ const App: React.FC = () => {
             overallComment: comment,
             status: 'completed',
             score: correctCount,
-            percentage: (correctCount / 40) * 100
+            percentage: (correctCount / phonicsSet.words.length) * 100
         };
         setCurrentCheck(finalCheck);
         setView('summary');
@@ -73,7 +75,11 @@ const App: React.FC = () => {
             <Header onNavigate={() => setView('dashboard')} />
             <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
                 {view === 'dashboard' && <Dashboard results={checkResults} onStartNewCheck={handleStartNewCheck} onUpload={() => setView('upload')} onViewResult={(result) => {setCurrentCheck(result); setView('summary')}}/>}
-                {view === 'upload' && <UploadMaterials onUploadSuccess={(set) => { setPhonicsSets(prev => [...prev, set]); setView('dashboard');}} onCancel={() => setView('dashboard')} sets={phonicsSets} setSets={setPhonicsSets} />}
+                {view === 'upload' && (
+                    <Suspense fallback={<div className="flex items-center justify-center p-8"><div className="text-lg">Loading upload tools...</div></div>}>
+                        <UploadMaterials onUploadSuccess={(set) => { setPhonicsSets(prev => [...prev, set]); setView('dashboard');}} onCancel={() => setView('dashboard')} sets={phonicsSets} setSets={setPhonicsSets} />
+                    </Suspense>
+                )}
                 {view === 'newCheck' && <NewCheck phonicsSets={phonicsSets} onStart={handleCreateCheck} onCancel={() => setView('dashboard')} />}
                 {view === 'assessment' && currentCheck && <Assessment check={currentCheck} phonicsSets={phonicsSets} onComplete={handleAssessmentComplete} />}
                 {view === 'summary' && currentCheck && <Summary result={currentCheck} onSave={handleSaveCheck} />}

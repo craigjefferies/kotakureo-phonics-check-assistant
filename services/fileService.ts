@@ -2,7 +2,7 @@ import type { PhonicsSet, PhonicsWord, CheckResult } from '../types';
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Configure PDF.js worker for bundled version
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('../pdf.worker.min.js', import.meta.url).toString();
 
 export const parsePhonicsFile = (file: File): Promise<Omit<PhonicsSet, 'id' | 'createdAt'>> => {
   return new Promise((resolve, reject) => {
@@ -70,9 +70,9 @@ export const parsePhonicsFile = (file: File): Promise<Omit<PhonicsSet, 'id' | 'c
           return reject(new Error("No valid words found in the Excel file. Please ensure the file contains a column with word data."));
         }
 
-        if (words.length !== 40) {
+        if (words.length < 20 || words.length > 40) {
           const sampleWords = words.slice(0, 5).map(w => w.item).join(', ');
-          return reject(new Error(`Expected exactly 40 words for a phonics check, but found ${words.length}. First few words: ${sampleWords}. Please ensure you're uploading a complete phonics check dataset.`));
+          return reject(new Error(`Expected 20-40 words for a phonics check (20-week or 40-week), but found ${words.length}. First few words: ${sampleWords}. Please ensure you're uploading a complete phonics check dataset.`));
         }
 
         const termName = file.name.replace(/\.(xlsx|xls|csv)$/i, '');
@@ -261,17 +261,17 @@ export const parsePhonicsPdf = (file: File): Promise<Omit<PhonicsSet, 'id' | 'cr
           console.log(`Using all ${finalWords.length} words found`);
         }
 
-        // Allow flexibility for word count - NZ MoE phonics checks should be around 40 words
-        if (finalWords.length < 10) {
-          return reject(new Error(`Expected approximately 40 words for a phonics check, but found ${finalWords.length}. The PDF may be in an unrecognized format or contain extra content. Found words: ${finalWords.slice(0, 10).join(', ')}${finalWords.length > 10 ? '...' : ''}`));
+        // Allow flexibility for word count - NZ MoE phonics checks should be 20-40 words
+        if (finalWords.length < 20) {
+          return reject(new Error(`Expected 20-40 words for a phonics check (20-week or 40-week), but found ${finalWords.length}. The PDF may be in an unrecognized format or contain extra content. Found words: ${finalWords.slice(0, 10).join(', ')}${finalWords.length > 10 ? '...' : ''}`));
         }
 
-        // Ensure we have exactly 40 words by taking the first 40 or padding if needed
+        // Ensure we don't exceed 40 words
         if (finalWords.length > 40) {
           finalWords = finalWords.slice(0, 40);
         }
 
-        console.log(`Final 40 words for phonics check:`, finalWords);
+        console.log(`Final ${finalWords.length} words for phonics check:`, finalWords);
 
         const words: PhonicsWord[] = finalWords.map(item => ({ item, graphemeType: 'N/A (from PDF)' }));
         const termName = file.name.replace(/\.pdf$/i, '');
