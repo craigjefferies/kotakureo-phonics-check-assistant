@@ -1,0 +1,5 @@
+{
+  "name": "Phonics Check Assistant",
+  "description": "A digital tool for teachers to administer, record, and report the NZ Phonics Check. It allows for uploading new term materials and exporting results in the Ministry of Education-required format.",
+  "requestFramePermissions": []
+}
