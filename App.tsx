@@ -73,7 +73,7 @@ const App: React.FC = () => {
     return (
         <div className="min-h-screen bg-slate-50 text-slate-800">
             <Header onNavigate={() => setView('dashboard')} />
-            <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+            <main className="p-2 sm:p-4 lg:p-6 max-w-7xl mx-auto">
                 {view === 'dashboard' && <Dashboard results={checkResults} onStartNewCheck={handleStartNewCheck} onUpload={() => setView('upload')} onViewResult={(result) => {setCurrentCheck(result); setView('summary')}}/>}
                 {view === 'upload' && (
                     <Suspense fallback={<div className="flex items-center justify-center p-8"><div className="text-lg">Loading upload tools...</div></div>}>
@@ -91,8 +91,8 @@ const App: React.FC = () => {
 const Header: React.FC<{onNavigate: () => void}> = ({onNavigate}) => (
     <header className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center py-4">
-                <h1 onClick={onNavigate} className="text-2xl font-bold text-brand-700 cursor-pointer">
+            <div className="flex justify-between items-center py-3">
+                <h1 onClick={onNavigate} className="text-xl font-bold text-brand-700 cursor-pointer">
                     Phonics Check Assistant
                 </h1>
             </div>

@@ -19,6 +19,64 @@ const Assessment: React.FC<AssessmentProps> = ({ check, phonicsSets, onComplete 
   const words = phonicsSet.words;
   const currentWord = words[wordIndex];
 
+  // Function to infer basic grapheme type from word structure
+  const inferGraphemeType = useCallback((word: string): string => {
+    if (word.includes('N/A')) return word; // Keep original N/A messages
+
+    const lowerWord = word.toLowerCase();
+    const vowels = 'aeiou';
+    const consonants = 'bcdfghjklmnpqrstvwxyz';
+
+    // Count vowels and consonants
+    let vowelCount = 0;
+    let consonantCount = 0;
+    let hasDigraph = false;
+
+    for (let i = 0; i < lowerWord.length; i++) {
+      const char = lowerWord[i];
+      if (vowels.includes(char)) {
+        vowelCount++;
+      } else if (consonants.includes(char)) {
+        consonantCount++;
+        // Check for common digraphs
+        if (i < lowerWord.length - 1) {
+          const nextChar = lowerWord[i + 1];
+          if (['ch', 'sh', 'th', 'wh', 'ph', 'ck', 'ng', 'qu'].some(d => char + nextChar === d)) {
+            hasDigraph = true;
+          }
+        }
+      }
+    }
+
+    // Basic pattern recognition
+    if (lowerWord.length === 1) return 'Single Letter';
+    if (lowerWord.length === 2) {
+      if (vowelCount === 1 && consonantCount === 1) return 'VC';
+      if (consonantCount === 2) return 'CC';
+    }
+    if (lowerWord.length === 3) {
+      if (vowelCount === 1 && consonantCount === 2) {
+        if (hasDigraph) return 'Digraph CC';
+        return 'CVC';
+      }
+    }
+    if (lowerWord.length === 4) {
+      if (vowelCount === 1 && consonantCount === 3) return 'CCVC';
+      if (vowelCount === 2 && consonantCount === 2) return 'CVCC';
+    }
+
+    // More complex patterns
+    if (hasDigraph) return 'Contains Digraph';
+    if (vowelCount > consonantCount) return 'Vowel Heavy';
+    if (consonantCount > vowelCount + 1) return 'Consonant Heavy';
+
+    return 'Complex Pattern';
+  }, []);
+
+  const displayGraphemeType = currentWord.graphemeType.includes('N/A')
+    ? inferGraphemeType(currentWord.item)
+    : currentWord.graphemeType;
+
   const consecutiveIncorrect = useMemo(() => {
     let count = 0;
     for (let i = results.length - 1; i >= 0; i--) {
@@ -60,21 +118,32 @@ const Assessment: React.FC<AssessmentProps> = ({ check, phonicsSets, onComplete 
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-lg p-8 sm:p-12 my-8">
-        <p className="text-7xl sm:text-8xl lg:text-9xl font-bold tracking-wider">{currentWord.item}</p>
-        <p className="text-slate-500 mt-2">Grapheme Type: {currentWord.graphemeType}</p>
+      <div className="bg-white rounded-lg shadow-lg p-6 sm:p-8 my-4">
+        <div className="text-center mb-4">
+          <p className="text-6xl sm:text-7xl lg:text-8xl font-bold tracking-wider leading-tight mb-2">{currentWord.item}</p>
+        </div>
+        <div className="border-t border-slate-200 pt-3">
+          <div className="flex items-center justify-center">
+            <div className="text-center">
+              <p className="text-slate-600 text-sm font-medium mb-1">Grapheme Type</p>
+              <p className={`text-base font-semibold ${displayGraphemeType.includes('N/A') || displayGraphemeType.includes('Not specified') || displayGraphemeType.includes('Complex') ? 'text-slate-400 italic' : 'text-slate-700'}`}>
+                {displayGraphemeType}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl mx-auto">
-        <Button onClick={() => handleMark('correct')} variant="custom" className="bg-green-600 hover:bg-green-700 text-white text-2xl py-6 flex items-center justify-center">
-          <CheckIcon className="w-8 h-8 mr-3" /> Got it
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl mx-auto mb-4">
+        <Button onClick={() => handleMark('correct')} variant="custom" className="bg-green-600 hover:bg-green-700 text-white text-xl py-4 flex items-center justify-center">
+          <CheckIcon className="w-6 h-6 mr-2" /> Got it
         </Button>
-        <Button onClick={() => handleMark('incorrect')} variant="custom" className="bg-red-600 hover:bg-red-700 text-white text-2xl py-6 flex items-center justify-center">
-          <XMarkIcon className="w-8 h-8 mr-3" /> Not yet
+        <Button onClick={() => handleMark('incorrect')} variant="custom" className="bg-red-600 hover:bg-red-700 text-white text-xl py-4 flex items-center justify-center">
+          <XMarkIcon className="w-6 h-6 mr-2" /> Not yet
         </Button>
       </div>
 
-      <div className="mt-6 max-w-xl mx-auto">
+      <div className="max-w-xl mx-auto">
         <input
           type="text"
           value={note}
