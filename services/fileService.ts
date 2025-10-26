@@ -294,7 +294,10 @@ export const parsePhonicsPdf = (file: File): Promise<Omit<PhonicsSet, 'id' | 'cr
   });
 };
 
-const TEMPLATE_PATH = '/Phonics-Check-Marking-Sheet-test-2025-10-25.xlsx';
+const TEMPLATE_CANDIDATES = [
+  'moe-phonics-marking-sheet-template.xlsx',
+  'Phonics-Check-Marking-Sheet-test-2025-10-25.xlsx',
+];
 
 const SHEET_PATHS = {
   cover: 'xl/worksheets/sheet1.xml',
@@ -318,8 +321,13 @@ const COVER_SHEET_CELLS = {
 const MARKING_SHEET_CONFIG = {
   setNameCell: 'F2',
   startRow: 4,
-  correctColumn: 'D',
-  commentColumn: 'E',
+  columns: {
+    number: 'B',
+    item: 'C',
+    graphemeType: 'D',
+    correct: 'E',
+    comment: 'F',
+  },
 };
 
 function formatDisplayDate(date: string): string {
@@ -398,26 +406,48 @@ function upsertCell(doc: Document, reference: string): Element | null {
 }
 
 async function loadTemplate(): Promise<JSZip> {
-  const response = await fetch(TEMPLATE_PATH);
-  if (!response.ok) {
-    throw new Error('Unable to load export template');
+  const failures: string[] = [];
+
+  for (const candidate of TEMPLATE_CANDIDATES) {
+    try {
+      const base = typeof window !== 'undefined'
+        ? `${window.location.origin}${import.meta.env.BASE_URL}`
+        : import.meta.env.BASE_URL;
+      const url = new URL(candidate, base).toString();
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        failures.push(`${candidate} (status ${response.status})`);
+        continue;
+      }
+
+      const buffer = await response.arrayBuffer();
+      return JSZip.loadAsync(buffer);
+    } catch (error) {
+      failures.push(candidate);
+    }
   }
-  const buffer = await response.arrayBuffer();
-  return JSZip.loadAsync(buffer);
+
+  throw new Error(`Unable to load export template. Tried: ${failures.join(', ')}`);
 }
 
 function updateCoverSheet(doc: Document, result: CheckResult): void {
-  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.studentName), result.studentName);
-  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.nsn), result.nsn);
-  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.testDate), formatDisplayDate(result.date));
-  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.checkType), result.checkType);
-  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.reasonNotDone), result.reasonNotDone || '');
-  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.generalComment), result.overallComment || '');
-  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.adminChange), '');
-  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.adminChangeReason), '');
-  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.location), result.location || '');
-  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.deliveryMedium), 'Digital');
-  setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.duration), '');
+  try {
+    setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.studentName), result.studentName);
+    setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.nsn), result.nsn);
+    setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.testDate), formatDisplayDate(result.date));
+    setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.checkType), result.checkType);
+    setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.reasonNotDone), result.reasonNotDone || '');
+    setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.generalComment), result.overallComment || '');
+    setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.adminChange), '');
+    setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.adminChangeReason), '');
+    setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.location), result.location || '');
+    setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.deliveryMedium), 'Digital');
+    setInlineStringValue(doc, upsertCell(doc, COVER_SHEET_CELLS.duration), '');
+  } catch (error) {
+    console.error('Cover sheet update failed:', error);
+    throw error;
+  }
 }
 
 function mapResultOutcome(outcome: WordResult['result']): string {
@@ -427,22 +457,74 @@ function mapResultOutcome(outcome: WordResult['result']): string {
 }
 
 function updateMarkingSheet(doc: Document, result: CheckResult): void {
-  setInlineStringValue(doc, upsertCell(doc, MARKING_SHEET_CONFIG.setNameCell), result.phonicsSetName);
+  try {
+    setInlineStringValue(doc, upsertCell(doc, MARKING_SHEET_CONFIG.setNameCell), result.phonicsSetName);
 
-  const totalRows = Math.min(result.results.length, 40);
-  for (let index = 0; index < totalRows; index++) {
-    const rowNumber = MARKING_SHEET_CONFIG.startRow + index;
-    const correctRef = cellReference(MARKING_SHEET_CONFIG.correctColumn, rowNumber);
-    const commentRef = cellReference(MARKING_SHEET_CONFIG.commentColumn, rowNumber);
+    const totalRows = Math.min(result.results.length, 40);
+
+    for (let index = 0; index < totalRows; index++) {
+      const rowNumber = MARKING_SHEET_CONFIG.startRow + index;
+    const correctRef = cellReference(MARKING_SHEET_CONFIG.columns.correct, rowNumber);
+    const commentRef = cellReference(MARKING_SHEET_CONFIG.columns.comment, rowNumber);
     const wordResult = result.results[index];
+
     setInlineStringValue(doc, upsertCell(doc, correctRef), mapResultOutcome(wordResult.result));
     setInlineStringValue(doc, upsertCell(doc, commentRef), wordResult.note || '');
   }
 
   for (let index = result.results.length; index < 40; index++) {
     const rowNumber = MARKING_SHEET_CONFIG.startRow + index;
-    setInlineStringValue(doc, upsertCell(doc, cellReference(MARKING_SHEET_CONFIG.correctColumn, rowNumber)), '');
-    setInlineStringValue(doc, upsertCell(doc, cellReference(MARKING_SHEET_CONFIG.commentColumn, rowNumber)), '');
+    setInlineStringValue(doc, upsertCell(doc, cellReference(MARKING_SHEET_CONFIG.columns.correct, rowNumber)), '');
+    setInlineStringValue(doc, upsertCell(doc, cellReference(MARKING_SHEET_CONFIG.columns.comment, rowNumber)), '');
+  }
+  } catch (error) {
+    console.error('Marking sheet update failed:', error);
+    throw error;
+  }
+}
+
+async function markWorkbookForRecalculation(zip: JSZip, parser: DOMParser, serializer: XMLSerializer): Promise<void> {
+  try {
+    const workbookFile = zip.file('xl/workbook.xml');
+    if (!workbookFile) {
+      return;
+    }
+
+    const workbookXml = await workbookFile.async('text');
+    const workbookDoc = parser.parseFromString(workbookXml, 'application/xml');
+
+    if (workbookDoc.getElementsByTagName('parsererror').length > 0) {
+      throw new Error('Failed to parse workbook XML');
+    }
+
+    const namespace = workbookDoc.documentElement.namespaceURI;
+    if (!namespace) {
+      return;
+    }
+
+    let workbookPr = workbookDoc.getElementsByTagNameNS(namespace, 'workbookPr')[0];
+    if (!workbookPr) {
+      workbookPr = workbookDoc.createElementNS(namespace, 'workbookPr');
+      workbookDoc.documentElement.insertBefore(workbookPr, workbookDoc.documentElement.firstChild);
+    }
+    workbookPr.setAttribute('calcMode', 'auto');
+    workbookPr.setAttribute('calcCompleted', '0');
+    workbookPr.setAttribute('fullCalcOnLoad', '1');
+
+    let calcPr = workbookDoc.getElementsByTagNameNS(namespace, 'calcPr')[0];
+    if (!calcPr) {
+      calcPr = workbookDoc.createElementNS(namespace, 'calcPr');
+      workbookDoc.documentElement.appendChild(calcPr);
+    }
+    const calcId = parseInt(calcPr.getAttribute('calcId') || '191028', 10) + 1;
+    calcPr.setAttribute('calcId', calcId.toString());
+    calcPr.setAttribute('calcOnSave', '1');
+    calcPr.setAttribute('fullCalcOnLoad', '1');
+    calcPr.setAttribute('forceFullCalc', '1');
+
+    zip.file('xl/workbook.xml', serializer.serializeToString(workbookDoc));
+  } catch (error) {
+    console.error('Failed to mark workbook for recalculation', error);
   }
 }
 
@@ -462,14 +544,51 @@ export const exportResultsToExcel = async (result: CheckResult) => {
     const coverDoc = parser.parseFromString(coverSheetXml, 'application/xml');
     const markingDoc = parser.parseFromString(markingSheetXml, 'application/xml');
 
+    // Check if parsing failed
+    if (coverDoc.getElementsByTagName('parsererror').length > 0) {
+      throw new Error('Failed to parse cover sheet XML');
+    }
+    if (markingDoc.getElementsByTagName('parsererror').length > 0) {
+      throw new Error('Failed to parse marking sheet XML');
+    }
+
     updateCoverSheet(coverDoc, result);
     updateMarkingSheet(markingDoc, result);
 
     zip.file(SHEET_PATHS.cover, serializer.serializeToString(coverDoc));
     zip.file(SHEET_PATHS.marking, serializer.serializeToString(markingDoc));
 
+    await markWorkbookForRecalculation(zip, parser, serializer);
+
+    // Force recalculation by removing calcChain and clearing cached formula values
     if (zip.file('xl/calcChain.xml')) {
       zip.remove('xl/calcChain.xml');
+    }
+
+    // Also clear cached values in Summary sheet to force recalculation
+    try {
+      const summarySheetPath = 'xl/worksheets/sheet3.xml';
+      const summaryXml = await zip.file(summarySheetPath)?.async('text');
+      if (summaryXml) {
+        const summaryDoc = parser.parseFromString(summaryXml, 'application/xml');
+        // Clear cached values for formula cells in Summary sheet (rows 4-16, columns C-E)
+        for (let row = 4; row <= 16; row++) {
+          for (const col of ['C', 'D', 'E']) {
+            const cellRef = `${col}${row}`;
+            const cell = summaryDoc.querySelector(`c[r="${cellRef}"]`);
+            if (cell && cell.querySelector('f')) {
+              // Remove the cached value <v> if it exists, keeping only the formula <f>
+              const vElement = cell.querySelector('v');
+              if (vElement) {
+                cell.removeChild(vElement);
+              }
+            }
+          }
+        }
+        zip.file(summarySheetPath, serializer.serializeToString(summaryDoc));
+      }
+    } catch (error) {
+      console.warn('Failed to clear Summary sheet cached values:', error);
     }
 
     const blob = await zip.generateAsync({ type: 'blob' });
@@ -479,12 +598,16 @@ export const exportResultsToExcel = async (result: CheckResult) => {
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = filename;
+    link.style.display = 'none';
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    }, 100);
+
   } catch (error) {
-    console.error('Export failed', error);
+    console.error('Export failed:', error);
     alert('Unable to export results. Please try again.');
   }
 };
