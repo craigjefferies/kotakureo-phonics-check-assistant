@@ -108,25 +108,25 @@ const Assessment: React.FC<AssessmentProps> = ({ check, phonicsSets, onComplete 
 
   return (
     <div className="max-w-3xl mx-auto text-center">
-      <div className="mb-4">
+      <div className="mb-2">
         <div className="flex justify-between items-center mb-1 text-sm text-slate-600">
           <span>Progress</span>
           <span>Word {wordIndex + 1} of {words.length}</span>
         </div>
-        <div className="w-full bg-slate-200 rounded-full h-2.5">
-          <div className="bg-brand-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
+        <div className="w-full bg-slate-200 rounded-full h-2">
+          <div className="bg-brand-600 h-2 rounded-full" style={{ width: `${progress}%` }}></div>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-lg p-6 sm:p-8 my-4">
-        <div className="text-center mb-4">
-          <p className="text-6xl sm:text-7xl lg:text-8xl font-bold tracking-wider leading-tight mb-2">{currentWord.item}</p>
+      <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 my-2">
+        <div className="text-center mb-2">
+          <p className="text-7xl sm:text-8xl lg:text-9xl font-bold tracking-wider leading-tight mb-1">{currentWord.item}</p>
         </div>
-        <div className="border-t border-slate-200 pt-3">
+        <div className="border-t border-slate-200 pt-2">
           <div className="flex items-center justify-center">
             <div className="text-center">
-              <p className="text-slate-600 text-sm font-medium mb-1">Grapheme Type</p>
-              <p className={`text-base font-semibold ${displayGraphemeType.includes('N/A') || displayGraphemeType.includes('Not specified') || displayGraphemeType.includes('Complex') ? 'text-slate-400 italic' : 'text-slate-700'}`}>
+              <p className="text-slate-600 text-xs font-medium mb-0.5">Grapheme Type</p>
+              <p className={`text-sm font-semibold ${displayGraphemeType.includes('N/A') || displayGraphemeType.includes('Not specified') || displayGraphemeType.includes('Complex') ? 'text-slate-400 italic' : 'text-slate-700'}`}>
                 {displayGraphemeType}
               </p>
             </div>
@@ -134,12 +134,12 @@ const Assessment: React.FC<AssessmentProps> = ({ check, phonicsSets, onComplete 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-xl mx-auto mb-4">
-        <Button onClick={() => handleMark('correct')} variant="custom" className="bg-green-600 hover:bg-green-700 text-white text-xl py-4 flex items-center justify-center">
-          <CheckIcon className="w-6 h-6 mr-2" /> Got it
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-xl mx-auto mb-2">
+        <Button onClick={() => handleMark('correct')} variant="custom" className="bg-green-600 hover:bg-green-700 text-white text-lg py-3 flex items-center justify-center">
+          <CheckIcon className="w-5 h-5 mr-2" /> Got it
         </Button>
-        <Button onClick={() => handleMark('incorrect')} variant="custom" className="bg-red-600 hover:bg-red-700 text-white text-xl py-4 flex items-center justify-center">
-          <XMarkIcon className="w-6 h-6 mr-2" /> Not yet
+        <Button onClick={() => handleMark('incorrect')} variant="custom" className="bg-red-600 hover:bg-red-700 text-white text-lg py-3 flex items-center justify-center">
+          <XMarkIcon className="w-5 h-5 mr-2" /> Not yet
         </Button>
       </div>
 
@@ -148,8 +148,8 @@ const Assessment: React.FC<AssessmentProps> = ({ check, phonicsSets, onComplete 
           type="text"
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Add a short note (e.g. 'did not blend')..."
-          className="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-brand-500 focus:border-brand-500 sm:text-sm"
+          placeholder="Add a short note..."
+          className="block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-brand-500 focus:border-brand-500 text-sm"
         />
       </div>
     </div>
