@@ -2,11 +2,16 @@
   "name": "phonics-check-assistant",
   "private": true,
   "version": "0.0.0",
+  "description": "A React-based application for conducting and managing New Zealand Ministry of Education (MoE) phonics checks",
   "type": "module",
+  "author": "Craig Jefferies",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview --host 0.0.0.0 --port 3000",
+    "start": "npm run preview",
+    "railway:deploy": "npm run build && echo 'Ready for Railway deployment'"
   },
   "dependencies": {
     "jszip": "^3.10.1",

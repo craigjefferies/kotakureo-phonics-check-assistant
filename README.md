@@ -43,6 +43,46 @@ npm run build
 
 The built files will be in the `dist/` directory.
 
+## Railway Deployment
+
+This application is configured for easy deployment on Railway.
+
+### Automatic Deployment
+
+1. **Connect to Railway**:
+   - Go to [Railway.app](https://railway.app) and sign in
+   - Click "New Project" → "Deploy from GitHub repo"
+   - Select this repository
+
+2. **Railway will automatically**:
+   - Detect the Vite configuration
+   - Install dependencies
+   - Build the application
+   - Deploy to a live URL
+
+### Manual Deployment (Alternative)
+
+If you prefer manual control:
+
+1. **Push to GitHub** (if not already done):
+   ```bash
+   git add .
+   git commit -m "Ready for deployment"
+   git push origin main
+   ```
+
+2. **Deploy on Railway**:
+   - Railway will detect the `railway.toml` or `railway.json` configuration
+   - The app will build and deploy automatically
+
+### Environment Variables
+
+If your app requires environment variables (like API keys), add them in your Railway project settings under "Variables".
+
+### Custom Domain (Optional)
+
+In Railway project settings, you can add a custom domain under "Settings" → "Domains".
+
 ## Usage
 
 1. **Upload Materials** (Admin): Upload phonics check materials in Excel or PDF format
